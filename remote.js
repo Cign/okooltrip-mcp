@@ -94,7 +94,7 @@ app.post("/mcp", bearerAuth, async (req, res) => {
       return;
     }
 
-    res.status(400).json({
+    res.status(404).json({
       jsonrpc: "2.0",
       error: { code: -32000, message: "Session MCP absente ou expirée — initialiser une nouvelle session" },
       id: null,

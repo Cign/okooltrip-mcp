@@ -72,6 +72,12 @@ export function resolveChildren(block) {
   return [textNode(block.text ?? "")];
 }
 
+/** Convertit "HH:MM" en "HH:MM:ss.SSS" attendu par Strapi pour les champs time */
+export function formatTime(t) {
+  if (!t) return t;
+  return /^\d{2}:\d{2}$/.test(t) ? `${t}:00.000` : t;
+}
+
 // --- Blocs de contenu (heading, paragraph, list, quote, code) ---
 export const contentBlockSchema = z.discriminatedUnion("type", [
   z.object({
@@ -1030,7 +1036,8 @@ export function createArticleMcpServer() {
     async ({ kind, id }) => {
       try {
         const apiPath = HEBERGEMENT_API[kind];
-        const params = "publicationState=preview&populate[amenities]=true&populate[services]=true&populate[priceTiers]=true&populate[Seo]=true&populate[images]=true&populate[contact]=true&populate[policies]=true&populate[rooms]=true";
+        // Utiliser populate= (virgules) compatible avec le controller custom hotel
+        const params = "publicationState=preview&populate=amenities,services,priceTiers,Seo,images,contact,policies,rooms";
         const body = await strapiRequest(`${apiPath}/${id}?${params}`);
         return jsonResult(body.data);
       } catch (error) {
@@ -1074,7 +1081,7 @@ export function createArticleMcpServer() {
       keywords: z.array(z.string()).optional(),
       canonicalPath: z.string().optional(),
     },
-    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, ...rest }) => {
+    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, check_in_time, check_out_time, ...rest }) => {
       try {
         const finalMetaTitle = (metaTitle || name).slice(0, 60);
         const finalMetaDescription = (metaDescription || description.slice(0, 160));
@@ -1086,6 +1093,8 @@ export function createArticleMcpServer() {
           address,
           city,
           country: country || "Sénégal",
+          ...(check_in_time !== undefined ? { check_in_time: formatTime(check_in_time) } : {}),
+          ...(check_out_time !== undefined ? { check_out_time: formatTime(check_out_time) } : {}),
           ...rest,
           ...(amenities?.length ? { amenities } : {}),
           ...(services?.length ? { services } : {}),
@@ -1159,7 +1168,7 @@ export function createArticleMcpServer() {
       keywords: z.array(z.string()).optional(),
       canonicalPath: z.string().optional(),
     },
-    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, ...rest }) => {
+    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, check_in_time, check_out_time, ...rest }) => {
       try {
         const finalMetaTitle = (metaTitle || name).slice(0, 60);
         const data = {
@@ -1170,6 +1179,8 @@ export function createArticleMcpServer() {
           address,
           city,
           country: country || "Sénégal",
+          ...(check_in_time !== undefined ? { check_in_time: formatTime(check_in_time) } : {}),
+          ...(check_out_time !== undefined ? { check_out_time: formatTime(check_out_time) } : {}),
           ...rest,
           ...(amenities?.length ? { amenities } : {}),
           ...(services?.length ? { services } : {}),
@@ -1240,7 +1251,7 @@ export function createArticleMcpServer() {
       keywords: z.array(z.string()).optional(),
       canonicalPath: z.string().optional(),
     },
-    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, ...rest }) => {
+    async ({ name, description, address, city, country, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, contact, check_in_time, check_out_time, ...rest }) => {
       try {
         const data = {
           name,
@@ -1251,6 +1262,8 @@ export function createArticleMcpServer() {
           city,
           country: country || "Sénégal",
           apartment_type: "villa",
+          ...(check_in_time !== undefined ? { check_in_time: formatTime(check_in_time) } : {}),
+          ...(check_out_time !== undefined ? { check_out_time: formatTime(check_out_time) } : {}),
           ...rest,
           ...(amenities?.length ? { amenities } : {}),
           ...(services?.length ? { services } : {}),
@@ -1315,9 +1328,11 @@ export function createArticleMcpServer() {
       keywords: z.array(z.string()).optional(),
       canonicalPath: z.string().optional(),
     },
-    async ({ kind, id, name, slug, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, ...rest }) => {
+    async ({ kind, id, name, slug, metaTitle, metaDescription, keywords, canonicalPath, amenities, services, priceTiers, check_in_time, check_out_time, ...rest }) => {
       try {
         const apiPath = HEBERGEMENT_API[kind];
+        if (check_in_time !== undefined) rest.check_in_time = formatTime(check_in_time);
+        if (check_out_time !== undefined) rest.check_out_time = formatTime(check_out_time);
         const hasSeo = metaTitle !== undefined || metaDescription !== undefined || keywords !== undefined || canonicalPath !== undefined || name !== undefined;
         const data = {};
 
@@ -1360,8 +1375,8 @@ export function createArticleMcpServer() {
       try {
         const apiPath = HEBERGEMENT_API[kind];
         const check = await strapiRequest(`${apiPath}/${id}?publicationState=preview&fields[0]=name`);
-        const name = check.data?.attributes?.name;
-        if (!name) throw new Error(`${kind} ${id} introuvable.`);
+        if (!check.data) throw new Error(`${kind} ${id} introuvable.`);
+        const name = check.data?.attributes?.name ?? check.data?.name ?? `${kind} #${id}`;
 
         await strapiRequest(`${apiPath}/${id}`, { method: "DELETE" });
         return jsonResult({ status: "hebergement_deleted", kind, id, name });
