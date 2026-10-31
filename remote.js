@@ -77,7 +77,7 @@ app.post("/mcp", bearerAuth, async (req, res) => {
       return;
     }
 
-    if (!sessionId && isInitializeRequest(req.body)) {
+    if ((!sessionId || !session) && isInitializeRequest(req.body)) {
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         enableJsonResponse: true,
